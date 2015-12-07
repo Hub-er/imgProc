@@ -1,0 +1,92 @@
+
+//Example for test reed solomon
+
+#define SZ      255         //NN
+#define ER      18          //KK
+#define SRC_LEN 78          //length of source
+
+int main(int argn, char**argv)
+{
+        int error_num = 1;
+        if (argn > 1)
+        {
+                error_num = atoi(argv[1]);
+//              if (error_num > ER)     error_num = ER;
+        }
+
+        void* handle;
+        handle = init_rs_char(8, 0x11d,   1,   1, 2*ER);
+
+        int errs = 0;
+        unsigned char *block = ( unsigned char *)malloc(SZ*sizeof(unsigned char));
+        int i=0;
+        for (i=0;i<SRC_LEN; ++i)
+           block[i] = i & SZ;
+        for (i=SRC_LEN; i<SZ; ++i)      block[i] = 0;
+
+        printf("SOURCE data:\n");
+        for (i=0; i<SRC_LEN; ++i)
+           printf("0x%02x ", block[i]);
+        printf("\n\n");
+
+//      const unsigned char * str = "012345";
+//      memcpy(block, str, strlen(str));
+
+        //encode
+        encode_rs_char(handle,&block[0],&block[SZ-2*ER]);
+
+        //decode        
+        unsigned char *tblock = ( unsigned char *)malloc(SZ*sizeof(unsigned char));
+        for (i=0;i<SZ; ++i) tblock[i] = 0;
+        //printf("result:%s\n", tblock);
+        memcpy(tblock, block, SZ*sizeof(unsigned char));
+
+        //modify data！
+        for (i=0; i<error_num; ++i)
+        {
+           int errval;
+                do {
+                errval = random() & SZ;
+            } while(errval == 0); /* Error value must be nonzero */
+
+           tblock[i] = errval;
+        }
+
+        unsigned int erasures;
+        int *derrlocs = (int *)malloc(2*ER*sizeof(int));
+        memset(derrlocs, 0, 2*ER*sizeof(int));
+
+        printf("MODIFIED data:\n");
+        for (i=0; i<SRC_LEN; ++i)
+        printf("0x%02x ", tblock[i]);
+        printf("\n");
+
+        //encode
+        int derrors = decode_rs_char(handle,tblock,derrlocs,erasures);
+
+        if (-1 != derrors)
+        {
+                printf("\ndecode success!\n");
+                printf("Found NUM of error:%d\n", derrors);
+                printf("Location of error:\n");
+                for (i=0; i<2*ER; ++i)
+                  printf("%d  ", derrlocs[i]);
+
+                printf("\nDECODE data:\n");
+                for (i=0; i<SRC_LEN; ++i)
+                  printf("0x%02x ", tblock[i]);
+
+                printf("\n");
+        }
+        else
+        {
+                printf("\ndecode failed!\n");
+        }
+        
+        fflush(stdout);
+        free_rs_char(handle);
+        free (tblock);
+        free (block);
+        free (derrlocs);
+        return 0;
+}
